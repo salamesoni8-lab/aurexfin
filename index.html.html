@@ -300,10 +300,8 @@ tr:hover td{background:var(--g50);}
 <div class="topbar">
   <span class="tb-crumb" id="tbc">Inicio</span>
   <div class="tb-r">
-    <span class="chip" id="periodo-chip">Sin datos</span>
+    <span class="chip" id="fecha-chip"></span>
     <span class="chip live">En l&#237;nea</span>
-    <button onclick="cargarDemoData()" style="background:var(--g100);border:1px solid var(--g200);color:var(--g700);padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;margin-right:6px">&#9654; Demo</button>
-    <button class="analyze-btn" data-role="admin operador" onclick="navTo('admin','carga',null)">+ Cargar datos</button>
   </div>
 </div>
 
@@ -2943,6 +2941,8 @@ document.addEventListener('DOMContentLoaded', function(){
   initUpload();
   initXMLUpload();
   actualizarSaludo();
+  var fc = document.getElementById('fecha-chip');
+  if (fc) fc.textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});
 });
 
 // ── CHAT ──
