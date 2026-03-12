@@ -277,11 +277,11 @@ tr:hover td{background:var(--g50);}
     <div class="sb-label">Inteligencia</div>
     <button class="si" onclick="goPage('ai',this)">&#10022; An&#225;lisis IA</button>
     <button class="si" onclick="goPage('chat',this)">&#9901; Chatbot Financiero</button>
-    <div class="sb-div"></div>
-    <div class="sb-label">Administraci&#243;n</div>
-    <button class="si sub" onclick="navTo('admin','carga',this)">&#8593; Carga de datos</button>
-    <button class="si sub" onclick="navTo('admin','usuarios',this)">Usuarios</button>
-    <button class="si sub" onclick="navTo('admin','auditoria',this)">Auditor&#237;a</button>
+    <div class="sb-div" data-role="admin operador"></div>
+    <div class="sb-label" data-role="admin operador">Administraci&#243;n</div>
+    <button class="si sub" data-role="admin operador" onclick="navTo('admin','carga',this)">&#8593; Carga de datos</button>
+    <button class="si sub" data-role="admin" onclick="navTo('admin','usuarios',this)">Usuarios</button>
+    <button class="si sub" data-role="admin" onclick="navTo('admin','auditoria',this)">Auditor&#237;a</button>
   </nav>
   <div class="sb-foot">
     <div class="sb-av">SS</div>
@@ -297,7 +297,7 @@ tr:hover td{background:var(--g50);}
     <span class="chip" id="periodo-chip">Sin datos</span>
     <span class="chip live">En l&#237;nea</span>
     <button onclick="cargarDemoData()" style="background:var(--g100);border:1px solid var(--g200);color:var(--g700);padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;margin-right:6px">&#9654; Demo</button>
-    <button class="analyze-btn" onclick="navTo('admin','carga',null)">+ Cargar datos</button>
+    <button class="analyze-btn" data-role="admin operador" onclick="navTo('admin','carga',null)">+ Cargar datos</button>
   </div>
 </div>
 
@@ -834,8 +834,8 @@ tr:hover td{background:var(--g50);}
   <div class="ph"><h1>Administraci&#243;n</h1><p>Carga de datos &middot; Usuarios &middot; Auditor&#237;a</p></div>
   <div class="itabs" id="admin-tabs">
     <button class="it on" onclick="navTo('admin','carga',null)">Carga de datos</button>
-    <button class="it"    onclick="navTo('admin','usuarios',null)">Usuarios</button>
-    <button class="it"    onclick="navTo('admin','auditoria',null)">Auditor&#237;a</button>
+    <button class="it" data-role="admin" onclick="navTo('admin','usuarios',null)">Usuarios</button>
+    <button class="it" data-role="admin" onclick="navTo('admin','auditoria',null)">Auditor&#237;a</button>
   </div>
 
   <!-- Carga -->
@@ -934,6 +934,11 @@ tr:hover td{background:var(--g50);}
       <div class="form-err" id="email-err">Solo se permiten correos &#64;cielco.com.mx</div>
     </div>
     <div class="form-row">
+      <div class="form-lbl">Contrase&#241;a</div>
+      <input class="form-inp" id="nuevo-password" type="password" placeholder="M&#237;nimo 6 caracteres">
+      <div class="form-err" id="password-err">Ingresa una contrase&#241;a de al menos 6 caracteres</div>
+    </div>
+    <div class="form-row">
       <div class="form-lbl">Rol</div>
       <select class="form-inp" id="nuevo-rol">
         <option value="admin">Administrador</option>
@@ -982,11 +987,29 @@ var LOGIN_USER_NAME = "";
 var LOGIN_ROLE      = "ejecutivo";
 var ROL_LABELS = { admin:"Administrador", operador:"Operador", ejecutivo:"Ejecutivo" };
 
-// ── Usuarios estáticos (sin backend) ──
-var STATIC_USERS = {
-  "admin@cielco.com.mx":    { password: "admin123",    nombre: "Soni Salame",      rol: "admin" },
-  "operador@cielco.com.mx": { password: "operador123", nombre: "Operador Cielco",  rol: "operador" }
+// ── Usuario administrador inicial (no se puede eliminar) ──
+var STATIC_ADMIN = {
+  "soni.salame@cielco.com.mx": { password: "admin123", nombre: "Soni Salame", rol: "admin" }
 };
+
+// Clave localStorage para usuarios adicionales
+var AQ_USERS_KEY = 'aq_usuarios_v1';
+
+// Devuelve el registro completo de usuarios (admin fijo + localStorage)
+function getUsers() {
+  var stored = {};
+  try { var r = localStorage.getItem(AQ_USERS_KEY); if (r) stored = JSON.parse(r); } catch(e) {}
+  return Object.assign({}, STATIC_ADMIN, stored);
+}
+
+// Persiste sólo los usuarios no-estáticos
+function guardarUsersLocales(users) {
+  var toStore = {};
+  Object.keys(users).forEach(function(email) {
+    if (!STATIC_ADMIN[email]) toStore[email] = users[email];
+  });
+  try { localStorage.setItem(AQ_USERS_KEY, JSON.stringify(toStore)); } catch(e) {}
+}
 function auditLog(accion, detalle) {
   var tbody = document.getElementById('audit-tbl');
   if (!tbody) return;
@@ -1099,6 +1122,9 @@ function navTo(page, tab, btn) {
   }
   if (page==='finanzas' && tab==='kpis') {
     if(typeof renderKPIsAvanzados==='function') setTimeout(renderKPIsAvanzados,50);
+  }
+  if (page==='admin' && tab==='usuarios') {
+    if(typeof cargarUsuarios==='function') setTimeout(cargarUsuarios,50);
   }
 }
 
@@ -2075,10 +2101,12 @@ function abrirModalUsuario() {
 }
 function cerrarModalUsuario() {
   document.getElementById("modal-usuario").classList.remove("open");
-  document.getElementById("nuevo-nombre").value = "";
-  document.getElementById("nuevo-email").value  = "";
-  document.getElementById("nuevo-rol").value    = "operador";
-  document.getElementById("email-err").style.display = "none";
+  document.getElementById("nuevo-nombre").value    = "";
+  document.getElementById("nuevo-email").value     = "";
+  document.getElementById("nuevo-password").value  = "";
+  document.getElementById("nuevo-rol").value       = "operador";
+  document.getElementById("email-err").style.display    = "none";
+  document.getElementById("password-err").style.display = "none";
 }
 
 // ── MODAL OC (placeholder) ──
@@ -2948,26 +2976,26 @@ function sbFetch(path, opts) {
   }, opts || {}));
 }
 
-// ── Step 1: validar correo contra usuarios estáticos (sin backend) ──
+// ── Step 1: validar correo (dominio + registro de usuarios) ──
 function solicitarPIN() {
   var email = document.getElementById("login-email").value.trim().toLowerCase();
   var errEl = document.getElementById("login-email-err");
   if (!email) { errEl.textContent = "Ingresa tu correo."; errEl.style.display="block"; return; }
-
-  var u = STATIC_USERS[email];
+  if (!email.endsWith("@cielco.com.mx")) {
+    errEl.textContent = "Solo se permiten correos corporativos \u0040cielco.com.mx.";
+    errEl.style.display = "block"; return;
+  }
+  var u = getUsers()[email];
   if (!u) {
     errEl.textContent = "Este correo no tiene acceso. Contacta al administrador.";
     errEl.style.display = "block"; return;
   }
   errEl.style.display = "none";
-
   LOGIN_USER      = email;
   LOGIN_USER_NAME = u.nombre;
   LOGIN_ROLE      = u.rol;
-
   var subEl = document.getElementById("login-step2-sub");
   if (subEl) subEl.textContent = "Hola, " + u.nombre + ". Ingresa tu contrase\u00f1a para continuar.";
-
   document.getElementById("login-step1").style.display = "none";
   document.getElementById("login-step2").style.display = "block";
   document.getElementById("login-pin").value = "";
@@ -2981,11 +3009,11 @@ function volverStep1() {
   LOGIN_PIN = null;
 }
 
-// ── Step 2: verificar contraseña estática ──
+// ── Step 2: verificar contraseña ──
 function verificarPIN() {
   var ingresado = document.getElementById("login-pin").value;
   var errEl     = document.getElementById("login-pin-err");
-  var u = STATIC_USERS[LOGIN_USER];
+  var u = getUsers()[LOGIN_USER];
   if (!u || ingresado !== u.password) {
     errEl.style.display = "block";
     document.getElementById("login-pin").value = "";
@@ -3012,89 +3040,99 @@ function verificarPIN() {
 }
 
 // ── Apply role restrictions ──
+// admin    → acceso total
+// operador → sube archivos, ve dashboards e IA, SIN gestión de usuarios
+// ejecutivo→ solo lectura, SIN carga, SIN administración
 function aplicarRol(rol) {
+  // 1. Ocultar elementos con data-role que no incluyan el rol actual
   document.querySelectorAll("[data-role]").forEach(function(el) {
     var allowed = el.getAttribute("data-role").split(" ");
     if (allowed.indexOf(rol) === -1) el.style.display = "none";
   });
+
+  // 2. Ejecutivo: bloquear todos los botones de acción (salvo los de navegación)
   if (rol === "ejecutivo") {
     document.querySelectorAll(".btn-pri, .btn-sec").forEach(function(b) {
-      if (!b.closest("#login-screen")) { b.style.pointerEvents="none"; b.style.opacity=".4"; }
+      if (!b.closest("#login-screen") && !b.closest(".chat-inp-row")) {
+        b.style.pointerEvents = "none"; b.style.opacity = ".4";
+      }
     });
-    document.querySelectorAll(".it, .si").forEach(function(b) {
-      b.style.pointerEvents=""; b.style.opacity="";
-    });
-    var uz = document.getElementById("upload-zone");
-    if (uz) uz.closest(".card").style.display = "none";
+  }
+
+  // 3. Cargar la lista de usuarios al entrar a Admin (sólo admin puede verla)
+  if (rol === "admin") {
+    // Se cargará cuando navegue a admin-usuarios
   }
 }
 
-// ── Load users from Supabase ──
+// ── Load users from localStorage ──
 function cargarUsuarios() {
-  sbFetch("usuarios?select=nombre,email,rol,ultimo_acceso&order=nombre")
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (!data || !data.length) return;
-      var RL = {admin:"Administrador", operador:"Operador", ejecutivo:"Ejecutivo"};
-      var RC = {admin:"bd", operador:"bi", ejecutivo:"bw"};
-      var tbody = document.getElementById("usuarios-tbl");
-      tbody.innerHTML = "";
-      data.forEach(function(u, i) {
-        var acceso = u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString("es-MX") : "\u2014";
-        var rol = u.rol || "ejecutivo";
-        var esSoni = u.email === "soni.salame@cielco.com.mx";
-        var tr = document.createElement("tr");
-        tr.id = "user-row-" + i;
-        tr.innerHTML =
-          "<td><strong>" + u.nombre + "</strong></td>" +
-          "<td style=\"font-family:var(--f2);font-size:12px\">" + u.email.replace("@","&#64;") + "</td>" +
-          "<td><span class=\"badge " + (RC[rol]||"bw") + "\">" + (RL[rol]||rol) + "</span></td>" +
-          "<td style=\"font-family:var(--f2);font-size:12px\">" + acceso + "</td>" +
-          "<td><span class=\"badge bo\">Activo</span></td>" +
-          "<td>" + (esSoni
-            ? "<span style=\"font-size:11px;color:var(--g400)\">Admin</span>"
-            : "<button onclick=\"eliminarUsuario(this,'" + u.email + "')\" style=\"background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px\" title=\"Eliminar\">&#128465;</button>") + "</td>";
-        tbody.appendChild(tr);
-      });
-    }).catch(function(){ console.warn("No se pudieron cargar usuarios"); });
+  var users = getUsers();
+  var RL = {admin:"Administrador", operador:"Operador", ejecutivo:"Ejecutivo"};
+  var RC = {admin:"bd", operador:"bi", ejecutivo:"bw"};
+  var tbody = document.getElementById("usuarios-tbl");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  Object.keys(users).forEach(function(email, i) {
+    var u = users[email];
+    var rol = u.rol || "ejecutivo";
+    var esAdmin = !!STATIC_ADMIN[email];
+    var tr = document.createElement("tr");
+    tr.id = "user-row-" + i;
+    tr.innerHTML =
+      "<td><strong>" + u.nombre + "</strong></td>" +
+      "<td style=\"font-family:var(--f2);font-size:12px\">" + email.replace("@","&#64;") + "</td>" +
+      "<td><span class=\"badge " + (RC[rol]||"bw") + "\">" + (RL[rol]||rol) + "</span></td>" +
+      "<td style=\"font-family:var(--f2);font-size:12px\">\u2014</td>" +
+      "<td><span class=\"badge bo\">Activo</span></td>" +
+      "<td>" + (esAdmin
+        ? "<span style=\"font-size:11px;color:var(--g400)\">Admin</span>"
+        : "<button onclick=\"eliminarUsuario(this,'" + email + "')\" style=\"background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px\" title=\"Eliminar\">&#128465;</button>") + "</td>";
+    tbody.appendChild(tr);
+  });
 }
 
-// ── Save new user to Supabase ──
+// ── Save new user to localStorage ──
 function guardarUsuario() {
-  var nombre = document.getElementById("nuevo-nombre").value.trim();
-  var email  = document.getElementById("nuevo-email").value.trim().toLowerCase();
-  var rol    = document.getElementById("nuevo-rol").value;
-  if (!nombre) { alert("Ingresa el nombre."); return; }
+  var nombre   = document.getElementById("nuevo-nombre").value.trim();
+  var email    = document.getElementById("nuevo-email").value.trim().toLowerCase();
+  var password = document.getElementById("nuevo-password").value.trim();
+  var rol      = document.getElementById("nuevo-rol").value;
+
+  if (!nombre) { alert("Ingresa el nombre completo."); return; }
   if (!email.endsWith("@cielco.com.mx")) {
     document.getElementById("email-err").style.display = "block"; return;
   }
   document.getElementById("email-err").style.display = "none";
-  var saveBtn = document.getElementById("modal-user-save");
-  saveBtn.textContent = "Guardando..."; saveBtn.disabled = true;
+  if (!password || password.length < 6) {
+    document.getElementById("password-err").style.display = "block"; return;
+  }
+  document.getElementById("password-err").style.display = "none";
 
-  sbFetch("usuarios", { method: "POST", body: JSON.stringify({ nombre: nombre, email: email, rol: rol }) })
-    .then(function(r) {
-      saveBtn.textContent = "Agregar"; saveBtn.disabled = false;
-      if (!r.ok) { r.json().then(function(e){ alert("Error: " + (e.message||"Verifica que el correo no est\u00e9 duplicado.")); }); return; }
-      cerrarModalUsuario();
-      cargarUsuarios();
-      showToast("Usuario " + nombre + " agregado");
-      auditLog("Nuevo usuario", nombre + " \u00b7 " + (ROL_LABELS[rol]||rol));
-    })
-    .catch(function() { saveBtn.textContent = "Agregar"; saveBtn.disabled = false; alert("Error de conexi\u00f3n."); });
+  var users = getUsers();
+  if (users[email]) { alert("Este correo ya est\u00e1 registrado."); return; }
+
+  users[email] = { nombre: nombre, rol: rol, password: password };
+  guardarUsersLocales(users);
+  cerrarModalUsuario();
+  cargarUsuarios();
+  showToast("Usuario " + nombre + " agregado");
+  auditLog("Nuevo usuario", nombre + " \u00b7 " + (ROL_LABELS[rol]||rol));
 }
 
-// ── Delete user from Supabase ──
+// ── Delete user from localStorage ──
 function eliminarUsuario(btn, email) {
   var row  = btn.closest("tr");
   var name = row && row.querySelector("td strong") ? row.querySelector("td strong").textContent : email;
+  if (STATIC_ADMIN[email]) { alert("No se puede eliminar al administrador principal."); return; }
+  if (email === LOGIN_USER) { alert("No puedes eliminar tu propia cuenta."); return; }
   if (!confirm("\u00bfEliminar a " + name + "?")) return;
-  sbFetch("usuarios?email=eq." + encodeURIComponent(email), { method: "DELETE" })
-    .then(function() {
-      if (row) { row.style.transition="opacity .3s"; row.style.opacity="0"; setTimeout(function(){ row.remove(); }, 300); }
-      showToast(name + " eliminado");
-      auditLog("Usuario eliminado", name);
-    }).catch(function(){ alert("Error al eliminar."); });
+  var users = getUsers();
+  delete users[email];
+  guardarUsersLocales(users);
+  if (row) { row.style.transition="opacity .3s"; row.style.opacity="0"; setTimeout(function(){ row.remove(); }, 300); }
+  showToast(name + " eliminado");
+  auditLog("Usuario eliminado", name);
 }
 
 
