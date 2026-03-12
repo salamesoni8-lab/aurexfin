@@ -1480,7 +1480,7 @@ function actualizarUI(total, txns, cats, obras, titulares, proveedores, fname) {
   var kpiProvs = document.getElementById('kpi-provs');
   if (kpiProvs) kpiProvs.textContent = Object.keys(proveedores).length;
   var mesesSet = {};
-  txns.forEach(function(t){ var m=(t.fecha||'').slice(0,7); if(m) mesesSet[m]=1; });
+  txns.forEach(function(t){ var m=extractMesISO(t.fecha); if(m) mesesSet[m]=1; });
   var kpiMeses = document.getElementById('kpi-meses');
   if (kpiMeses) kpiMeses.textContent = Object.keys(mesesSet).length;
   var kpiArch = document.getElementById('kpi-archivos');
@@ -1722,7 +1722,7 @@ function actualizarUI(total, txns, cats, obras, titulares, proveedores, fname) {
   var allCats   = Object.keys(cats).sort();
   var allProvs  = Object.keys(proveedores).filter(Boolean).sort();
   var allFrentes= [...new Set(txns.map(function(t){return t.frente;}).filter(Boolean))].sort();
-  var allMeses  = [...new Set(txns.map(function(t){ return t.fecha ? t.fecha.slice(0,7) : ''; }).filter(Boolean))].sort();
+  var allMeses  = [...new Set(txns.map(function(t){ return extractMesISO(t.fecha); }).filter(Boolean))].sort();
 
   poblarSelect('od-obra',    allObras,  'Todas las obras');
   poblarSelect('od-cat',     allCats,   'Todas las categorías');
@@ -2024,7 +2024,9 @@ function agregarHistorial(fname, registros) {
 function eliminarArchivo(idx) {
   var row = document.getElementById('hist-row-' + idx);
   if (!row) return;
-  var nombre = AQ.archivos[idx] ? AQ.archivos[idx].nombre : 'este archivo';
+  var archivo = AQ.archivos[idx];
+  var nombre = archivo ? archivo.nombre : 'este archivo';
+  var tipo   = archivo ? archivo.tipo : undefined;
   if (!confirm('¿Eliminar "' + nombre + '" del historial?')) return;
   AQ.archivos.splice(idx, 1);
   row.style.transition = 'opacity .3s';
@@ -2048,6 +2050,19 @@ function eliminarArchivo(idx) {
       document.getElementById('hist-tbl').appendChild(empty);
     }
     setEl('hist-cnt', AQ.archivos.length + (AQ.archivos.length===1?' archivo':' archivos'), 'text');
+
+    // Limpiar datos en memoria según el tipo de archivo eliminado
+    var quedanExcel = AQ.archivos.some(function(a){ return !a.tipo || a.tipo !== 'xml'; });
+    var quedanXML   = AQ.archivos.some(function(a){ return a.tipo === 'xml'; });
+    if (tipo !== 'xml') {
+      // Era Excel/CSV: si no quedan más archivos de datos, limpiar transacciones y KPIs
+      if (!quedanExcel) resetearDatosUI();
+      else guardarDatosLocales();
+    } else {
+      // Era XML: si no quedan XMLs, limpiar facturas
+      if (!quedanXML) { AQ.facturas = {}; actualizarTablaFacturas(); }
+      guardarDatosLocales();
+    }
   }, 300);
   showToast('"' + nombre + '" eliminado del historial');
 }
@@ -2156,6 +2171,45 @@ function destroyChart(id) {
   if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
 }
 
+// ── HELPER: extrae YYYY-MM de fecha en cualquier formato (ISO o DD/MM/YYYY) ──
+function extractMesISO(fecha) {
+  if (!fecha) return '';
+  if (/^\d{4}-\d{2}/.test(fecha)) return fecha.slice(0,7); // Ya ISO: YYYY-MM-DD → YYYY-MM
+  var p = String(fecha).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (p) return p[3] + '-' + p[2].padStart(2,'0');          // DD/MM/YYYY → YYYY-MM
+  return '';
+}
+
+// ── Resetea KPIs y tablas al estado vacío tras borrar todos los datos ──
+function resetearDatosUI() {
+  AQ.transacciones = []; AQ.categorias = {}; AQ.obras = {}; AQ.titulares = {}; AQ.proveedores = {};
+  Object.keys(_charts).forEach(function(k){ destroyChart(k); });
+  var dash = '<span style="font-size:14px;color:var(--g300)">&#8212;</span>';
+  ['kpi-total','kpi-txn','kpi-obras','kpi-ticket','kpi-cats','kpi-provs','kpi-meses',
+   'fd-total','fd-txn','fd-cats','fd-obras',
+   'kpi-adv-total','kpi-adv-txn','kpi-adv-ticket','kpi-adv-max',
+   'alerta-count','alerta-cat-top','alerta-max-txn',
+   'sc-ctrl','sc-dist','sc-conc','sc-vol'].forEach(function(id){ setEl(id, dash); });
+  var arc = document.getElementById('score-arc');
+  if (arc) arc.style.strokeDashoffset = '226';
+  var scoreNum = document.getElementById('score-num');
+  if (scoreNum) scoreNum.textContent = '—';
+  var scoreChip = document.getElementById('score-chip');
+  if (scoreChip) { scoreChip.textContent = 'Sin datos'; scoreChip.style.color = ''; }
+  var hint = document.getElementById('score-hint');
+  if (hint) hint.textContent = 'Carga un archivo Excel para calcular el score financiero.';
+  var kpiArch = document.getElementById('kpi-archivos');
+  if (kpiArch) kpiArch.textContent = AQ.archivos.length || '—';
+  setEl('periodo-chip', 'Sin datos', 'text');
+  ['home-actividad','home-top-obras'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = '<div class="empty" style="padding:28px 0"><div class="empty-ico">&#9783;</div><div class="empty-sub">Sin datos cargados</div></div>';
+  });
+  var alertasEl = document.getElementById('home-alertas-list');
+  if (alertasEl) alertasEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 0;color:var(--g400)"><div style="font-size:32px;margin-bottom:10px;opacity:.3">&#9651;</div><div style="font-size:14px;font-weight:600;color:var(--g500)">Sin alertas</div><div style="font-size:12px;color:var(--g400);margin-top:4px">Las alertas aparecer&#225;n al cargar datos</div></div>';
+  guardarDatosLocales();
+}
+
 var CHART_COLORS = ['#C8150E','#e03028','#e85d58','#f08580','#f5a8a5','#facacb','#a01008','#780c06','#d41510','#f0c4c3'];
 
 function renderChartMeses() {
@@ -2163,7 +2217,7 @@ function renderChartMeses() {
   if (!ctx || !AQ.transacciones.length) return;
   var map = {};
   AQ.transacciones.forEach(function(t){
-    var m = t.fecha ? t.fecha.slice(0,7) : 'Sin fecha';
+    var m = extractMesISO(t.fecha) || 'Sin fecha';
     map[m] = (map[m]||0) + t.monto;
   });
   var labels = Object.keys(map).sort();
@@ -2348,7 +2402,7 @@ function renderSparklines() {
   if (!AQ.transacciones.length) return;
   var mesMap = {};
   AQ.transacciones.forEach(function(t){
-    var m = t.fecha ? t.fecha.slice(0,7) : '?';
+    var m = extractMesISO(t.fecha) || '?';
     mesMap[m] = (mesMap[m]||0) + t.monto;
   });
   var meses = Object.keys(mesMap).sort();
@@ -2813,6 +2867,13 @@ function cargarDatosLocales() {
     var datos = JSON.parse(raw);
     if (!datos.transacciones || !datos.transacciones.length) return false;
 
+    // Normalizar fechas guardadas en formato antiguo DD/MM/YYYY → ISO YYYY-MM-DD
+    datos.transacciones.forEach(function(t) {
+      if (t.fecha && !/^\d{4}-\d{2}-\d{2}/.test(t.fecha)) {
+        var p = t.fecha.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (p) t.fecha = p[3] + '-' + p[2].padStart(2,'0') + '-' + p[1].padStart(2,'0');
+      }
+    });
     AQ.transacciones = datos.transacciones;
     AQ.archivos      = datos.archivos || [];
 
