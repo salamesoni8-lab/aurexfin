@@ -292,7 +292,7 @@ tr:hover td{background:var(--g50);}
   <div class="sb-foot">
     <div class="sb-av">SS</div>
     <div><div class="sb-un">Soni Salame</div><div class="sb-ur">Administrador</div></div>
-    <button class="sb-out">&#9099;</button>
+    <button class="sb-out" onclick="cerrarSesion()" title="Cerrar sesi&#243;n">&#9099;</button>
   </div>
 </aside>
 
@@ -3006,6 +3006,17 @@ function solicitarPIN() {
   document.getElementById("login-pin").value = "";
   document.getElementById("login-pin-err").style.display = "none";
   setTimeout(function(){ document.getElementById("login-pin").focus(); }, 100);
+}
+
+function cerrarSesion() {
+  LOGIN_PIN = null; LOGIN_USER = null; LOGIN_USER_NAME = ""; LOGIN_ROLE = "ejecutivo";
+  var ls = document.getElementById("login-screen");
+  ls.style.display = "flex"; ls.style.opacity = "0";
+  setTimeout(function(){ ls.style.transition = "opacity .3s"; ls.style.opacity = "1"; }, 10);
+  document.getElementById("login-step1").style.display = "block";
+  document.getElementById("login-step2").style.display = "none";
+  document.getElementById("login-email").value = "";
+  document.getElementById("login-email-err").style.display = "none";
 }
 
 function volverStep1() {
