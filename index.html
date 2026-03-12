@@ -892,7 +892,7 @@ tr:hover td{background:var(--g50);}
         <tbody id="usuarios-tbl">
           <tr id="user-row-0">
             <td><strong>Soni Salame</strong></td>
-            <td style="font-family:var(--f2);font-size:12px">soni.salame&#64;cielco.com.mx</td>
+            <td style="font-family:var(--f2);font-size:12px">soni&#64;cielco.com.mx</td>
             <td><span class="badge bd">Administrador</span></td>
             <td style="font-family:var(--f2);font-size:12px">—</td>
             <td><span class="badge bo">Activo</span></td>
@@ -956,8 +956,10 @@ tr:hover td{background:var(--g50);}
 <!-- ══ TOAST ══ -->
 <div id="toast"></div>
 
-<!-- Config (credenciales externas — no subir a git) -->
-<script src="config.js"></script>
+<!-- Defaults seguros para cuando config.js no existe (GitHub Pages, demo) -->
+<script>window.AQ_CONFIG = { SB_URL:'', SB_KEY:'', TG_TOKEN:'', TG_CHAT_ID:'', SENTRY_DSN:'' };</script>
+<!-- Config (credenciales externas — sobreescribe los defaults si existe) -->
+<script src="config.js" onerror="console.info('config.js no encontrado — usando defaults')"></script>
 <!-- Sentry — monitoreo de errores en producción -->
 <script src="https://browser.sentry-cdn.com/8.53.0/bundle.min.js" crossorigin="anonymous"></script>
 <!-- SheetJS + Chart.js — must load before main script -->
@@ -989,7 +991,7 @@ var ROL_LABELS = { admin:"Administrador", operador:"Operador", ejecutivo:"Ejecut
 
 // ── Usuario administrador inicial (no se puede eliminar) ──
 var STATIC_ADMIN = {
-  "soni.salame@cielco.com.mx": { password: "admin123", nombre: "Soni Salame", rol: "admin" }
+  "soni@cielco.com.mx": { password: "admin123", nombre: "Soni Salame", rol: "admin" }
 };
 
 // Clave localStorage para usuarios adicionales
