@@ -990,28 +990,18 @@ var LOGIN_USER_NAME = "";
 var LOGIN_ROLE      = "ejecutivo";
 var ROL_LABELS = { admin:"Administrador", operador:"Operador", ejecutivo:"Ejecutivo" };
 
-// ── Usuario administrador inicial (no se puede eliminar) ──
-var STATIC_ADMIN = {
-  "soni@cielco.com.mx": { nombre: "Soni Salame", rol: "admin" }
-};
-
-// Clave localStorage para usuarios adicionales
+// Clave localStorage para usuarios
 var AQ_USERS_KEY = 'aq_usuarios_v1';
 
-// Devuelve el registro completo de usuarios (admin fijo + localStorage)
+// Devuelve todos los usuarios guardados en localStorage
 function getUsers() {
-  var stored = {};
-  try { var r = localStorage.getItem(AQ_USERS_KEY); if (r) stored = JSON.parse(r); } catch(e) {}
-  return Object.assign({}, STATIC_ADMIN, stored);
+  try { var r = localStorage.getItem(AQ_USERS_KEY); if (r) return JSON.parse(r); } catch(e) {}
+  return {};
 }
 
-// Persiste sólo los usuarios no-estáticos
+// Persiste todos los usuarios en localStorage
 function guardarUsersLocales(users) {
-  var toStore = {};
-  Object.keys(users).forEach(function(email) {
-    if (!STATIC_ADMIN[email]) toStore[email] = users[email];
-  });
-  try { localStorage.setItem(AQ_USERS_KEY, JSON.stringify(toStore)); } catch(e) {}
+  try { localStorage.setItem(AQ_USERS_KEY, JSON.stringify(users)); } catch(e) {}
 }
 function auditLog(accion, detalle) {
   var tbody = document.getElementById('audit-tbl');
@@ -1320,6 +1310,9 @@ function getColMap(headerRow) {
 
 function normObra(val) {
   var s = String(val||'').trim();
+  // Strip text suffix after first hyphen: '5294-POWERCHINA' → '5294'
+  var dash = s.indexOf('-');
+  if (dash > 0) s = s.substring(0, dash).trim();
   var su = s.toUpperCase();
   if (!s || su === 'SIN PROYECTO' || su === 'N/A' || su === '-' || su === 'NONE' || s === '') return 'SIN OBRA';
   return su;
@@ -1379,8 +1372,8 @@ function procesarDatos(raw, fname) {
   var map = getColMap(headerRow);
 
   // Validate we got the expected columns
-  if (map['IMPORTE'] === undefined && map['TOTAL'] === undefined) {
-    showToast('No se encontraron columnas esperadas. Usa el archivo limpio (LIMPIO.xlsx)');
+  if (map['IMPORTE'] === undefined) {
+    showToast('No se encontró la columna IMPORTE. Usa el archivo limpio (LIMPIO.xlsx)');
     return;
   }
 
@@ -2986,10 +2979,19 @@ function solicitarPIN() {
     errEl.textContent = "Solo se permiten correos corporativos \u0040cielco.com.mx.";
     errEl.style.display = "block"; return;
   }
-  var u = getUsers()[email];
+  var users = getUsers();
+  var u = users[email];
   if (!u) {
-    errEl.textContent = "Este correo no tiene acceso. Contacta al administrador.";
-    errEl.style.display = "block"; return;
+    if (Object.keys(users).length === 0) {
+      // Primer acceso: auto-crear como Admin
+      var nombre = email.split('@')[0].replace(/[\._]/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+      u = { nombre: nombre, rol: 'admin' };
+      users[email] = u;
+      guardarUsersLocales(users);
+    } else {
+      errEl.textContent = "Este correo no tiene acceso. Contacta al administrador.";
+      errEl.style.display = "block"; return;
+    }
   }
   errEl.style.display = "none";
   LOGIN_USER      = email;
@@ -3078,7 +3080,7 @@ function cargarUsuarios() {
   Object.keys(users).forEach(function(email, i) {
     var u = users[email];
     var rol = u.rol || "ejecutivo";
-    var esAdmin = !!STATIC_ADMIN[email];
+    var esAdmin = email === LOGIN_USER;
     var tr = document.createElement("tr");
     tr.id = "user-row-" + i;
     tr.innerHTML =
@@ -3088,7 +3090,7 @@ function cargarUsuarios() {
       "<td style=\"font-family:var(--f2);font-size:12px\">\u2014</td>" +
       "<td><span class=\"badge bo\">Activo</span></td>" +
       "<td>" + (esAdmin
-        ? "<span style=\"font-size:11px;color:var(--g400)\">Admin</span>"
+        ? "<span style=\"font-size:11px;color:var(--g400)\">T\u00fa</span>"
         : "<button onclick=\"eliminarUsuario(this,'" + email + "')\" style=\"background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px\" title=\"Eliminar\">&#128465;</button>") + "</td>";
     tbody.appendChild(tr);
   });
@@ -3121,7 +3123,6 @@ function guardarUsuario() {
 function eliminarUsuario(btn, email) {
   var row  = btn.closest("tr");
   var name = row && row.querySelector("td strong") ? row.querySelector("td strong").textContent : email;
-  if (STATIC_ADMIN[email]) { alert("No se puede eliminar al administrador principal."); return; }
   if (email === LOGIN_USER) { alert("No puedes eliminar tu propia cuenta."); return; }
   if (!confirm("\u00bfEliminar a " + name + "?")) return;
   var users = getUsers();
