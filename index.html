@@ -233,19 +233,13 @@ tr:hover td{background:var(--g50);}
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px;">
         <button onclick="volverStep1()" style="font-size:12px;color:#9ca3af;margin-bottom:16px;background:none;border:none;cursor:pointer;padding:0;">&#8592; Cambiar correo</button>
         <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:4px;">Verifica tu identidad</div>
-        <div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Tu PIN de acceso es:</div>
-        <div style="background:#f3f4f6;border:2px solid #e5e7eb;border-radius:10px;padding:18px;text-align:center;margin-bottom:20px;">
-          <div style="font-size:10px;font-weight:600;color:#9ca3af;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;">PIN de acceso &#250;nico</div>
-          <div id="pin-numero" style="font-size:36px;font-weight:800;color:#1f2937;letter-spacing:.25em;font-family:IBM Plex Mono,monospace;"></div>
-          <div style="font-size:11px;color:#9ca3af;margin-top:6px;">&#193;notalo antes de continuar</div>
-        </div>
+        <div id="login-step2-sub" style="font-size:12px;color:#9ca3af;margin-bottom:22px;"></div>
         <div style="margin-bottom:16px;">
-          <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Ingresa tu PIN</div>
-          <input id="login-pin" type="text" maxlength="4" placeholder="0000"
-            style="width:100%;padding:10px 13px;border:1px solid #e5e7eb;border-radius:9px;font-size:20px;font-weight:700;letter-spacing:.3em;text-align:center;font-family:IBM Plex Mono,monospace;outline:none;box-sizing:border-box;"
-            oninput="this.value=this.value.replace(/\D/g,'')"
+          <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Contrase&#241;a</div>
+          <input id="login-pin" type="password" placeholder="&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;"
+            style="width:100%;padding:10px 13px;border:1px solid #e5e7eb;border-radius:9px;font-size:16px;font-weight:600;outline:none;box-sizing:border-box;font-family:Inter,sans-serif;"
             onkeydown="if(event.key==='Enter')verificarPIN()">
-          <div id="login-pin-err" style="font-size:11px;color:var(--red);margin-top:5px;display:none;">PIN incorrecto. Intenta de nuevo.</div>
+          <div id="login-pin-err" style="font-size:11px;color:var(--red);margin-top:5px;display:none;">Contrase&#241;a incorrecta. Intenta de nuevo.</div>
         </div>
         <button onclick="verificarPIN()" style="width:100%;padding:11px;background:var(--red);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;">Entrar a la plataforma</button>
       </div>
@@ -987,6 +981,12 @@ var LOGIN_USER      = null;
 var LOGIN_USER_NAME = "";
 var LOGIN_ROLE      = "ejecutivo";
 var ROL_LABELS = { admin:"Administrador", operador:"Operador", ejecutivo:"Ejecutivo" };
+
+// ── Usuarios estáticos (sin backend) ──
+var STATIC_USERS = {
+  "admin@cielco.com.mx":    { password: "admin123",    nombre: "Soni Salame",      rol: "admin" },
+  "operador@cielco.com.mx": { password: "operador123", nombre: "Operador Cielco",  rol: "operador" }
+};
 function auditLog(accion, detalle) {
   var tbody = document.getElementById('audit-tbl');
   if (!tbody) return;
@@ -2948,44 +2948,31 @@ function sbFetch(path, opts) {
   }, opts || {}));
 }
 
-// ── Step 1: validate email + check Supabase ──
+// ── Step 1: validar correo contra usuarios estáticos (sin backend) ──
 function solicitarPIN() {
   var email = document.getElementById("login-email").value.trim().toLowerCase();
   var errEl = document.getElementById("login-email-err");
-  var btn   = document.getElementById("btn-continuar");
   if (!email) { errEl.textContent = "Ingresa tu correo."; errEl.style.display="block"; return; }
-  if (!email.endsWith("@cielco.com.mx")) {
-    errEl.textContent = "Solo se permiten correos @cielco.com.mx.";
+
+  var u = STATIC_USERS[email];
+  if (!u) {
+    errEl.textContent = "Este correo no tiene acceso. Contacta al administrador.";
     errEl.style.display = "block"; return;
   }
   errEl.style.display = "none";
-  btn.textContent = "Verificando..."; btn.disabled = true;
 
-  sbFetch("usuarios?email=eq." + encodeURIComponent(email) + "&select=nombre,rol")
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      btn.textContent = "Continuar"; btn.disabled = false;
-      if (!data || data.length === 0) {
-        errEl.textContent = "Este correo no tiene acceso. Contacta al administrador.";
-        errEl.style.display = "block"; return;
-      }
-      var u = data[0];
-      LOGIN_USER      = email;
-      LOGIN_USER_NAME = u.nombre || email.split("@")[0].split(".").map(function(p){ return p.charAt(0).toUpperCase()+p.slice(1); }).join(" ");
-      LOGIN_ROLE      = u.rol || "ejecutivo";
-      LOGIN_PIN       = String(Math.floor(1000 + Math.random() * 9000));
-      document.getElementById("pin-numero").textContent = LOGIN_PIN;
-      document.getElementById("login-step1").style.display = "none";
-      document.getElementById("login-step2").style.display = "block";
-      document.getElementById("login-pin").value = "";
-      document.getElementById("login-pin-err").style.display = "none";
-      setTimeout(function(){ document.getElementById("login-pin").focus(); }, 100);
-    })
-    .catch(function() {
-      btn.textContent = "Continuar"; btn.disabled = false;
-      errEl.textContent = "Error de conexion. Intenta de nuevo.";
-      errEl.style.display = "block";
-    });
+  LOGIN_USER      = email;
+  LOGIN_USER_NAME = u.nombre;
+  LOGIN_ROLE      = u.rol;
+
+  var subEl = document.getElementById("login-step2-sub");
+  if (subEl) subEl.textContent = "Hola, " + u.nombre + ". Ingresa tu contrase\u00f1a para continuar.";
+
+  document.getElementById("login-step1").style.display = "none";
+  document.getElementById("login-step2").style.display = "block";
+  document.getElementById("login-pin").value = "";
+  document.getElementById("login-pin-err").style.display = "none";
+  setTimeout(function(){ document.getElementById("login-pin").focus(); }, 100);
 }
 
 function volverStep1() {
@@ -2994,11 +2981,12 @@ function volverStep1() {
   LOGIN_PIN = null;
 }
 
-// ── Step 2: verify PIN + enter platform ──
+// ── Step 2: verificar contraseña estática ──
 function verificarPIN() {
-  var ingresado = document.getElementById("login-pin").value.trim();
+  var ingresado = document.getElementById("login-pin").value;
   var errEl     = document.getElementById("login-pin-err");
-  if (ingresado !== LOGIN_PIN) {
+  var u = STATIC_USERS[LOGIN_USER];
+  if (!u || ingresado !== u.password) {
     errEl.style.display = "block";
     document.getElementById("login-pin").value = "";
     document.getElementById("login-pin").focus(); return;
@@ -3019,20 +3007,6 @@ function verificarPIN() {
   if (window.Sentry) {
     Sentry.setUser({ email: LOGIN_USER, username: LOGIN_USER_NAME, role: LOGIN_ROLE });
   }
-
-  // Update last access
-  sbFetch("usuarios?email=eq." + encodeURIComponent(LOGIN_USER), {
-    method: "PATCH",
-    body: JSON.stringify({ ultimo_acceso: new Date().toISOString() })
-  }).catch(function(){});
-
-  // Telegram
-  var now = new Date().toLocaleString("es-MX");
-  var msg = "\u{1F510} *Login Alfa Quattro*\n\n\u{1F464} " + LOGIN_USER_NAME + "\n\u{1F4E7} " + LOGIN_USER + "\n\u{1F550} " + now + "\n\nRol: " + (ROL_LABELS[LOGIN_ROLE]||LOGIN_ROLE);
-  fetch("https://api.telegram.org/bot" + TG_TOKEN + "/sendMessage", {
-    method: "POST", headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown" })
-  }).catch(function(){});
 
   auditLog("Inicio de sesi\u00f3n", LOGIN_USER_NAME + " \u00b7 " + ROL_LABELS[LOGIN_ROLE]);
 }
