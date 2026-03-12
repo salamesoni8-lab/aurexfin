@@ -965,6 +965,7 @@ tr:hover td{background:var(--g50);}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
 <script>
 
@@ -988,18 +989,55 @@ var LOGIN_USER_NAME = "";
 var LOGIN_ROLE      = "ejecutivo";
 var ROL_LABELS = { admin:"Administrador", operador:"Operador", ejecutivo:"Ejecutivo" };
 
-// Clave localStorage para usuarios
+// ── USER MANAGEMENT (Supabase + localStorage fallback) ──
 var AQ_USERS_KEY = 'aq_usuarios_v1';
+var _sb = null;
+var _usersCache = {};
 
-// Devuelve todos los usuarios guardados en localStorage
-function getUsers() {
-  try { var r = localStorage.getItem(AQ_USERS_KEY); if (r) return JSON.parse(r); } catch(e) {}
-  return {};
+function initSupabase() {
+  if (window.AQ_CONFIG.SB_URL && window.AQ_CONFIG.SB_KEY && window.supabase) {
+    _sb = window.supabase.createClient(window.AQ_CONFIG.SB_URL, window.AQ_CONFIG.SB_KEY);
+  }
 }
 
-// Persiste todos los usuarios en localStorage
-function guardarUsersLocales(users) {
+function getUsers() { return _usersCache; }
+
+async function cargarUsersRemoto() {
+  if (_sb) {
+    try {
+      var res = await _sb.from('usuarios').select('email,nombre,rol');
+      if (res.data && res.data.length >= 0) {
+        _usersCache = {};
+        res.data.forEach(function(u){ _usersCache[u.email] = { nombre: u.nombre, rol: u.rol }; });
+        return;
+      }
+    } catch(e) { console.warn('Supabase usuarios:', e); }
+  }
+  try { var r = localStorage.getItem(AQ_USERS_KEY); if (r) _usersCache = JSON.parse(r); } catch(e) {}
+}
+
+async function guardarUsersLocales(users) {
+  _usersCache = Object.assign({}, users);
+  if (_sb) {
+    try {
+      var rows = Object.keys(users).map(function(email) {
+        return { email: email, nombre: users[email].nombre, rol: users[email].rol };
+      });
+      if (rows.length) await _sb.from('usuarios').upsert(rows, { onConflict: 'email' });
+      return;
+    } catch(e) { console.warn('Supabase upsert usuarios:', e); }
+  }
   try { localStorage.setItem(AQ_USERS_KEY, JSON.stringify(users)); } catch(e) {}
+}
+
+async function eliminarUserRemoto(email) {
+  if (_sb) {
+    try { await _sb.from('usuarios').delete().eq('email', email); } catch(e) { console.warn(e); }
+  }
+  var users = Object.assign({}, _usersCache);
+  delete users[email];
+  _usersCache = users;
+  if (!_sb) try { localStorage.setItem(AQ_USERS_KEY, JSON.stringify(users)); } catch(e) {}
 }
 function auditLog(accion, detalle) {
   var tbody = document.getElementById('audit-tbl');
@@ -2864,39 +2902,107 @@ function renderConsumoObras() {
   });
 }
 
-// ── PERSISTENCIA LOCAL ──
+// ── PERSISTENCIA (Supabase + localStorage fallback) ──
 var AQ_STORAGE_KEY = 'aq_datos_v1';
 
 function guardarDatosLocales() {
   try {
-    var datos = {
-      transacciones: AQ.transacciones,
-      archivos:      AQ.archivos,
-      guardado:      new Date().toISOString()
-    };
-    localStorage.setItem(AQ_STORAGE_KEY, JSON.stringify(datos));
-  } catch(e) {
-    console.warn('localStorage lleno o bloqueado:', e);
-  }
+    localStorage.setItem(AQ_STORAGE_KEY, JSON.stringify({
+      transacciones: AQ.transacciones, archivos: AQ.archivos, guardado: new Date().toISOString()
+    }));
+  } catch(e) { console.warn('localStorage:', e); }
+  if (_sb && AQ.transacciones.length) _guardarTransaccionesSupabase(AQ.transacciones).catch(console.error);
 }
 
-function cargarDatosLocales() {
+async function _guardarTransaccionesSupabase(txns) {
+  var rows = txns.map(function(t) {
+    return {
+      no_op:        t.no_op        || null,
+      banco:        t.banco        || null,
+      fecha:        t.fecha        || null,
+      descripcion:  t.descripcion  || null,
+      importe:      t.monto        || 0,
+      titular:      t.titular      || null,
+      efecto:       t.efecto       || null,
+      uuid:         t.uuid         || null,
+      rfc_emisor:   t.rfc          || null,
+      razon_social: t.proveedor    || null,
+      ieps:         t.ieps         || 0,
+      iva_8:        t.iva8         || 0,
+      iva_16:       t.iva16        || 0,
+      subtotal:     t.subtotal     || 0,
+      total:        t.total_factura|| 0,
+      categoria:    t.categoria    || null,
+      proyecto:     t.obra         || null,
+      frente:       t.frente       || null
+    };
+  });
+  var withOp    = rows.filter(function(r){ return r.no_op; });
+  var withoutOp = rows.filter(function(r){ return !r.no_op; });
+  var batchSize = 500;
+  for (var i = 0; i < withOp.length; i += batchSize)
+    await _sb.from('transacciones').upsert(withOp.slice(i, i+batchSize), { onConflict: 'no_op' });
+  for (var i = 0; i < withoutOp.length; i += batchSize)
+    await _sb.from('transacciones').insert(withoutOp.slice(i, i+batchSize));
+}
+
+async function cargarDatosLocales() {
+  if (_sb) {
+    try {
+      var res = await _sb.from('transacciones').select('*').order('fecha', { ascending: true });
+      if (res.data && res.data.length) {
+        var txns = res.data.map(function(r) {
+          return {
+            fecha:         r.fecha         || '',
+            monto:         Math.abs(parseFloat(r.importe)||0),
+            subtotal:      parseFloat(r.subtotal)||0,
+            total_factura: parseFloat(r.total)||0,
+            ieps:          parseFloat(r.ieps)||0,
+            iva8:          parseFloat(r.iva_8)||0,
+            iva16:         parseFloat(r.iva_16)||0,
+            descripcion:   r.descripcion   || '',
+            proveedor:     (r.razon_social  || '').toUpperCase(),
+            rfc:           (r.rfc_emisor    || '').toUpperCase(),
+            obra:          normObra(r.proyecto || ''),
+            frente:        (r.frente        || '').toUpperCase(),
+            categoria:     normCat(r.categoria || ''),
+            titular:       r.titular        || '',
+            banco:         r.banco          || '',
+            no_op:         r.no_op          || '',
+            efecto:        r.efecto         || '',
+            uuid:          r.uuid           || ''
+          };
+        });
+        AQ.transacciones = txns;
+        if (!AQ.archivos.length) AQ.archivos = [{ nombre: 'Supabase', registros: txns.length, fecha: new Date().toLocaleDateString('es-MX'), tipo: 'xlsx' }];
+        var total = 0, cats = {}, obras = {}, titulares = {}, proveedores = {};
+        txns.forEach(function(t) {
+          total += t.monto;
+          cats[t.categoria]      = (cats[t.categoria]||0)        + t.monto;
+          obras[t.obra]          = (obras[t.obra]||0)            + t.monto;
+          if (t.titular)   titulares[t.titular]     = (titulares[t.titular]||0)     + t.monto;
+          if (t.proveedor) proveedores[t.proveedor] = (proveedores[t.proveedor]||0) + t.monto;
+        });
+        AQ.categorias = cats; AQ.obras = obras; AQ.titulares = titulares; AQ.proveedores = proveedores;
+        actualizarUI(total, txns, cats, obras, titulares, proveedores, 'Supabase');
+        showToast('Datos cargados: ' + txns.length + ' registros');
+        return true;
+      }
+    } catch(e) { console.warn('Error cargando Supabase:', e); }
+  }
+  // Fallback: localStorage
   try {
     var raw = localStorage.getItem(AQ_STORAGE_KEY);
     if (!raw) return false;
     var datos = JSON.parse(raw);
     if (!datos.transacciones || !datos.transacciones.length) return false;
-
-    // Normalizar fechas guardadas en formato antiguo DD/MM/YYYY → ISO YYYY-MM-DD
     datos.transacciones.forEach(function(t) {
       if (t.fecha && !/^\d{4}-\d{2}-\d{2}/.test(t.fecha)) {
         var p = t.fecha.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
         if (p) t.fecha = p[3] + '-' + p[2].padStart(2,'0') + '-' + p[1].padStart(2,'0');
       }
     });
-    AQ.transacciones = datos.transacciones;
-    AQ.archivos      = datos.archivos || [];
-
+    AQ.transacciones = datos.transacciones; AQ.archivos = datos.archivos || [];
     var total = 0, cats = {}, obras = {}, titulares = {}, proveedores = {};
     datos.transacciones.forEach(function(t) {
       total += t.monto;
@@ -2905,19 +3011,12 @@ function cargarDatosLocales() {
       if (t.titular)   titulares[t.titular]     = (titulares[t.titular]||0)     + t.monto;
       if (t.proveedor) proveedores[t.proveedor] = (proveedores[t.proveedor]||0) + t.monto;
     });
-    AQ.categorias  = cats;
-    AQ.obras       = obras;
-    AQ.titulares   = titulares;
-    AQ.proveedores = proveedores;
-
+    AQ.categorias = cats; AQ.obras = obras; AQ.titulares = titulares; AQ.proveedores = proveedores;
     var fname = AQ.archivos.length ? AQ.archivos[AQ.archivos.length-1].nombre : 'Datos guardados';
     actualizarUI(total, datos.transacciones, cats, obras, titulares, proveedores, fname);
     showToast('Datos restaurados: ' + datos.transacciones.length + ' registros');
     return true;
-  } catch(e) {
-    console.warn('Error al restaurar datos:', e);
-    return false;
-  }
+  } catch(e) { console.warn('Error restaurando datos:', e); return false; }
 }
 
 function limpiarDatosLocales() {
@@ -2926,7 +3025,10 @@ function limpiarDatosLocales() {
   location.reload();
 }
 
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', async function(){
+  initSupabase();
+  await cargarUsersRemoto();
+
   var addBtn = document.getElementById('btn-add-user');
   if (addBtn) addBtn.addEventListener('click', abrirModalUsuario);
   var mx = document.getElementById('modal-user-x');
@@ -2943,6 +3045,7 @@ document.addEventListener('DOMContentLoaded', function(){
   actualizarSaludo();
   var fc = document.getElementById('fecha-chip');
   if (fc) fc.textContent = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});
+  await cargarDatosLocales();
 });
 
 // ── CHAT ──
@@ -2971,7 +3074,7 @@ function sbFetch(path, opts) {
 }
 
 // ── Step 1: validar correo (dominio + registro de usuarios) ──
-function solicitarPIN() {
+async function solicitarPIN() {
   var email = document.getElementById("login-email").value.trim().toLowerCase();
   var errEl = document.getElementById("login-email-err");
   if (!email) { errEl.textContent = "Ingresa tu correo."; errEl.style.display="block"; return; }
@@ -2987,7 +3090,7 @@ function solicitarPIN() {
       var nombre = email.split('@')[0].replace(/[\._]/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
       u = { nombre: nombre, rol: 'admin' };
       users[email] = u;
-      guardarUsersLocales(users);
+      await guardarUsersLocales(users);
     } else {
       errEl.textContent = "Este correo no tiene acceso. Contacta al administrador.";
       errEl.style.display = "block"; return;
@@ -3108,7 +3211,7 @@ function cargarUsuarios() {
 }
 
 // ── Save new user to localStorage ──
-function guardarUsuario() {
+async function guardarUsuario() {
   var nombre = document.getElementById("nuevo-nombre").value.trim();
   var email  = document.getElementById("nuevo-email").value.trim().toLowerCase();
   var rol    = document.getElementById("nuevo-rol").value;
@@ -3123,7 +3226,7 @@ function guardarUsuario() {
   if (users[email]) { alert("Este correo ya est\u00e1 registrado."); return; }
 
   users[email] = { nombre: nombre, rol: rol };
-  guardarUsersLocales(users);
+  await guardarUsersLocales(users);
   cerrarModalUsuario();
   cargarUsuarios();
   showToast("Usuario " + nombre + " agregado");
@@ -3131,14 +3234,12 @@ function guardarUsuario() {
 }
 
 // ── Delete user from localStorage ──
-function eliminarUsuario(btn, email) {
+async function eliminarUsuario(btn, email) {
   var row  = btn.closest("tr");
   var name = row && row.querySelector("td strong") ? row.querySelector("td strong").textContent : email;
   if (email === LOGIN_USER) { alert("No puedes eliminar tu propia cuenta."); return; }
   if (!confirm("\u00bfEliminar a " + name + "?")) return;
-  var users = getUsers();
-  delete users[email];
-  guardarUsersLocales(users);
+  await eliminarUserRemoto(email);
   if (row) { row.style.transition="opacity .3s"; row.style.opacity="0"; setTimeout(function(){ row.remove(); }, 300); }
   showToast(name + " eliminado");
   auditLog("Usuario eliminado", name);
