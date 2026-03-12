@@ -1,0 +1,7 @@
+node_modules/
+config.js
+*.xlsx
+*.zip
+*.xls
+*.csv
+package-lock.json
