@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS usuarios (
 ALTER TABLE transacciones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios      ENABLE ROW LEVEL SECURITY;
 
--- Policies for transacciones
+-- Policies for transacciones  (idempotent: drop first so re-runs never fail)
+DROP POLICY IF EXISTS "anon can read transacciones"   ON transacciones;
+DROP POLICY IF EXISTS "anon can insert transacciones" ON transacciones;
+
 CREATE POLICY "anon can read transacciones"
   ON transacciones FOR SELECT
   USING (true);
@@ -51,6 +54,9 @@ CREATE POLICY "anon can insert transacciones"
   WITH CHECK (true);
 
 -- Policies for usuarios
+DROP POLICY IF EXISTS "anon can read usuarios"   ON usuarios;
+DROP POLICY IF EXISTS "anon can insert usuarios" ON usuarios;
+
 CREATE POLICY "anon can read usuarios"
   ON usuarios FOR SELECT
   USING (true);
