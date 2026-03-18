@@ -1,5 +1,6 @@
 {
-  "buildCommand": "node build.js",
+  "framework": null,
+  "buildCommand": "node -e \"const fs=require('fs'),u=process.env.SUPABASE_URL,k=process.env.SUPABASE_ANON_KEY;fs.writeFileSync('config/config.js','const CONFIG={supabase:{url:\\\"'+u+'\\\",anonKey:\\\"'+k+'\\\"}};');\"",
   "outputDirectory": ".",
-  "installCommand": ""
+  "installCommand": "echo 'static site — no install needed'"
 }
