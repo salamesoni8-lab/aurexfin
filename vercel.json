@@ -1,6 +1,29 @@
 {
   "framework": null,
+  "installCommand": "echo 'static site — no install needed'",
   "buildCommand": "node -e \"const fs=require('fs'),u=process.env.SUPABASE_URL||'',k=process.env.SUPABASE_ANON_KEY||'',bt=process.env.TELEGRAM_BOT_TOKEN||'TU_BOT_TOKEN',ci=process.env.TELEGRAM_CHAT_ID||'TU_CHAT_ID';fs.writeFileSync('config/config.js','const CONFIG={supabase:{url:\\\"'+u+'\\\",anonKey:\\\"'+k+'\\\"},telegram:{botToken:\\\"'+bt+'\\\",chatId:\\\"'+ci+'\\\"}};');\"",
   "outputDirectory": ".",
-  "installCommand": "echo 'static site — no install needed'"
+  "headers": [
+    {
+      "source": "/js/:file*",
+      "headers": [
+        { "key": "Content-Type", "value": "text/javascript; charset=utf-8" },
+        { "key": "Cache-Control",  "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/css/:file*",
+      "headers": [
+        { "key": "Content-Type", "value": "text/css; charset=utf-8" },
+        { "key": "Cache-Control",  "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/config/:file*",
+      "headers": [
+        { "key": "Content-Type", "value": "text/javascript; charset=utf-8" },
+        { "key": "Cache-Control",  "value": "no-store" }
+      ]
+    }
+  ]
 }
