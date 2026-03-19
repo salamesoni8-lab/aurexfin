@@ -1,28 +1,22 @@
 {
   "framework": null,
-  "installCommand": "echo 'static site — no install needed'",
   "buildCommand": "node build.js",
   "outputDirectory": ".",
+  "installCommand": "echo ok",
   "headers": [
     {
-      "source": "/js/:file*",
-      "headers": [
-        { "key": "Content-Type", "value": "text/javascript; charset=utf-8" },
-        { "key": "Cache-Control",  "value": "public, max-age=0, must-revalidate" }
-      ]
+      "source": "/js/(.*)",
+      "headers": [{ "key": "Content-Type", "value": "text/javascript" }]
     },
     {
-      "source": "/css/:file*",
-      "headers": [
-        { "key": "Content-Type", "value": "text/css; charset=utf-8" },
-        { "key": "Cache-Control",  "value": "public, max-age=0, must-revalidate" }
-      ]
+      "source": "/css/(.*)",
+      "headers": [{ "key": "Content-Type", "value": "text/css" }]
     },
     {
-      "source": "/config/:file*",
+      "source": "/config/(.*)",
       "headers": [
-        { "key": "Content-Type", "value": "text/javascript; charset=utf-8" },
-        { "key": "Cache-Control",  "value": "no-store" }
+        { "key": "Content-Type", "value": "text/javascript" },
+        { "key": "Cache-Control", "value": "no-store" }
       ]
     }
   ]
