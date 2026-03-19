@@ -1,5 +1,27 @@
 // app.js — Inicialización y control de la aplicación
 
+/**
+ * actualizarUI — punto de entrada para refrescar el dashboard con los datos
+ * actuales de PERIODS[]. Valida que haya filas antes de renderizar.
+ */
+function actualizarUI() {
+  if (!PERIODS[0] || PERIODS[0].length === 0) {
+    show('uploadScreen');
+    renderHistorial();
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-family:var(--f2);font-size:10px;color:var(--r);text-align:center;margin-top:12px;';
+    hint.textContent = 'No se encontraron transacciones INGRESO en el archivo. Revisa la columna EFECTO.';
+    const wrap = document.querySelector('.upload-wrap');
+    if (wrap && !wrap.querySelector('.upload-err')) {
+      hint.className = 'upload-err';
+      wrap.insertBefore(hint, wrap.querySelector('.upload-historial'));
+      setTimeout(() => hint.remove(), 8000);
+    }
+    return;
+  }
+  initDash();
+}
+
 function initDash() {
   show('dash');
   document.getElementById('tabsBar').style.display = 'block';

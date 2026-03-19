@@ -19,6 +19,10 @@
     </div>
   </div>
   <div class="nav-right">
+    <div class="nav-user" id="navUser">
+      <span class="nav-email" id="navEmail"></span>
+      <button id="btnLogout" onclick="doLogout()">SALIR</button>
+    </div>
     <div class="pill" id="p1">SIN DATOS</div>
     <div class="pill" id="p2" style="display:none"></div>
     <button id="btnReset" onclick="resetApp()">✕ REINICIAR</button>
@@ -34,6 +38,23 @@
     <button class="tab" onclick="switchTab(this,'s4')" id="tabCmp">04 COMPARATIVO</button>
     <button class="tab" onclick="switchTab(this,'s5')">05 MOVIMIENTOS</button>
     <button class="tab" onclick="switchTab(this,'s6')">06 ANÁLISIS IA</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-wrap">
+    <div class="login-logo">
+      <div class="brand-hex"><span>AQ</span></div>
+    </div>
+    <div class="login-title">ALFA QUATTRO</div>
+    <div class="login-sub">ACCESO RESTRINGIDO · CIELCO.COM.MX</div>
+    <div class="login-form">
+      <input class="login-input" type="email"    id="loginEmail" placeholder="correo@cielco.com.mx" autocomplete="email">
+      <input class="login-input" type="password" id="loginPass"  placeholder="Contraseña"            autocomplete="current-password">
+      <div class="login-error" id="loginError"></div>
+      <button class="btn-primary" id="loginBtn" onclick="doLogin()">INICIAR SESIÓN</button>
+    </div>
   </div>
 </div>
 
@@ -63,6 +84,12 @@
       <button class="btn-sec" onclick="loadDemo()">VER DEMO</button>
     </div>
     <div class="upload-hint">EL ARCHIVO SE SUBE DIRECTO · SE LIMPIA AUTOMÁTICAMENTE · SE GUARDA EN SUPABASE</div>
+    <div class="upload-historial">
+      <div class="hist-title">CARGAS RECIENTES</div>
+      <div class="hist-list" id="historialLista">
+        <div class="hist-empty">Sin cargas recientes</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -323,6 +350,7 @@
 <script src="config/theme.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/data.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/kpis.js"></script>

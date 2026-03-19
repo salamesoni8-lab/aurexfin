@@ -27,11 +27,10 @@ function agg(data, field) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function show(id) {
-  ['uploadScreen','loadScreen','dash'].forEach(s => {
+  ['loginScreen','uploadScreen','loadScreen','dash'].forEach(s => {
     const el = document.getElementById(s);
     if (!el) return;
-    if (s === id) el.style.display = s==='dash' ? 'block' : 'flex';
-    else el.style.display = 'none';
+    el.style.display = (s === id) ? (s === 'dash' ? 'block' : 'flex') : 'none';
   });
 }
 

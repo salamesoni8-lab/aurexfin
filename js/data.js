@@ -58,6 +58,7 @@ async function startAnalysis() {
           }
         });
         PERIODS[i] = (result.rows || []).map(edgeRowToLocal).filter(r => r.importe > 0);
+        agregarHistorial(file.name, result.after_filter || PERIODS[i].length);
         console.log(`[Edge] Archivo ${i+1}: ${result.inserted} nuevas, ${result.after_filter} procesadas.`);
       } catch (err) {
         console.warn('[Edge] Error, usando parser local:', err.message);
@@ -80,7 +81,7 @@ async function startAnalysis() {
   await sleep(200);
   setLoad('LISTO', 100);
   await sleep(300);
-  initDash();
+  actualizarUI();
 }
 
 /**
@@ -426,6 +427,47 @@ function normalize(rows) {
   return result.filter(r => r.importe > 0);
 }
 
+// ─────────────────────────────────────────────
+// Historial de cargas (localStorage)
+// ─────────────────────────────────────────────
+
+/**
+ * Registra una carga en el historial local.
+ * @param {string} fileName  Nombre del archivo subido
+ * @param {number} filas     Número de filas procesadas
+ */
+function agregarHistorial(fileName, filas) {
+  const item = {
+    fecha:   new Date().toISOString(),
+    archivo: fileName,
+    filas:   filas || 0,
+  };
+  const historial = JSON.parse(localStorage.getItem('aq_historial') || '[]');
+  historial.unshift(item);
+  localStorage.setItem('aq_historial', JSON.stringify(historial.slice(0, 30)));
+  renderHistorial();
+}
+
+/** Renderiza el historial de cargas en #historialLista */
+function renderHistorial() {
+  const el = document.getElementById('historialLista');
+  if (!el) return;
+  const historial = JSON.parse(localStorage.getItem('aq_historial') || '[]');
+  if (historial.length === 0) {
+    el.innerHTML = '<div class="hist-empty">Sin cargas recientes</div>';
+    return;
+  }
+  el.innerHTML = historial.map(h => {
+    const d = new Date(h.fecha);
+    const fStr = d.toLocaleDateString('es-MX') + ' ' +
+                 d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="hist-item">
+      <div class="hist-name">${h.archivo}</div>
+      <div class="hist-meta">${fStr} &nbsp;·&nbsp; ${h.filas} filas</div>
+    </div>`;
+  }).join('');
+}
+
 function getAllData() {
   const a = (PERIODS[0]||[]).map(r => ({...r, _period: P_NAMES[0], _pidx: 0}));
   const b = (PERIODS[1]||[]).map(r => ({...r, _period: P_NAMES[1], _pidx: 1}));
@@ -440,7 +482,7 @@ function loadDemo() {
     P_NAMES = ['ENERO 2026', 'FEBRERO 2026'];
     FILES_RAW = [true, true];
     setLoad('LISTO', 100);
-    setTimeout(initDash, 300);
+    setTimeout(actualizarUI, 300);
   }, 600);
 }
 
